@@ -55,6 +55,7 @@ class UCIEngine {
     static Search::LimitsType parse_limits(std::istream& is);
 
     auto& engine_options() { return engine.get_options(); }
+    auto& coordinator() { return engine; }
 
    private:
     EngineCoordinator engine;

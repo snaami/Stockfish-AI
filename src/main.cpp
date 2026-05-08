@@ -62,7 +62,7 @@ int main(int argc, char* argv[]) {
     if (mcpConfig.config.enabled)
     {
         std::string error;
-        mcpServer = std::make_unique<MCPHttpServer>(mcpConfig.config);
+        mcpServer = std::make_unique<MCPHttpServer>(mcpConfig.config, uci->coordinator());
 
         if (!mcpServer->start(error))
         {

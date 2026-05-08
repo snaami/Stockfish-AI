@@ -31,9 +31,11 @@ class Server;
 
 namespace Stockfish {
 
+class EngineCoordinator;
+
 class MCPHttpServer {
    public:
-    explicit MCPHttpServer(MCPConfig config);
+    MCPHttpServer(MCPConfig config, EngineCoordinator& coordinator);
     ~MCPHttpServer();
 
     MCPHttpServer(const MCPHttpServer&)            = delete;
@@ -46,6 +48,7 @@ class MCPHttpServer {
 
    private:
     MCPConfig                    config;
+    EngineCoordinator&           coordinator;
     std::unique_ptr<httplib::Server> server;
     std::thread                  serverThread;
 };

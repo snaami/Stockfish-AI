@@ -23,13 +23,15 @@
 
 namespace Stockfish {
 
+class EngineCoordinator;
+
 struct MCPProtocolResponse {
     int         status = 200;
     std::string body;
     std::string contentType = "application/json";
 };
 
-MCPProtocolResponse handle_mcp_post(const std::string& body);
+MCPProtocolResponse handle_mcp_post(const std::string& body, EngineCoordinator& coordinator);
 
 }  // namespace Stockfish
 

@@ -78,6 +78,7 @@ class EngineCoordinator {
     int         get_hashfull(int maxAge = 0) const;
     std::string fen() const;
     std::string visualize() const;
+    std::string options_as_uci() const;
     std::string get_numa_config_as_string() const;
     std::string numa_config_information_as_string() const;
     std::string thread_allocation_information_as_string() const;

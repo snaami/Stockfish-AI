@@ -19,6 +19,7 @@
 #include "engine_coordinator.h"
 
 #include <mutex>
+#include <sstream>
 
 namespace Stockfish {
 
@@ -119,6 +120,13 @@ std::string EngineCoordinator::fen() const {
 std::string EngineCoordinator::visualize() const {
     std::lock_guard<std::mutex> lock(mutex);
     return engine.visualize();
+}
+
+std::string EngineCoordinator::options_as_uci() const {
+    std::lock_guard<std::mutex> lock(mutex);
+    std::stringstream           ss;
+    ss << engine.get_options();
+    return ss.str();
 }
 
 std::string EngineCoordinator::get_numa_config_as_string() const {

@@ -18,12 +18,15 @@
 
 #include "mcp_protocol.h"
 
+#include "engine_coordinator.h"
+
 #include <cctype>
 #include <charconv>
 #include <map>
 #include <optional>
 #include <sstream>
 #include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -466,9 +469,91 @@ MCPProtocolResponse response_with_json(const Json& json) {
     return response;
 }
 
+Json resource_descriptor(std::string uri, std::string name, std::string description,
+                         std::string mimeType = "application/json") {
+    return Json::Object{{"uri", std::move(uri)},
+                        {"name", std::move(name)},
+                        {"description", std::move(description)},
+                        {"mimeType", std::move(mimeType)}};
+}
+
+Json resources_list_result() {
+    return Json::Object{{"resources",
+                         Json::Array{
+                           resource_descriptor("stockfish://state/current", "Current state",
+                                               "Current shared Stockfish position and search state."),
+                           resource_descriptor("stockfish://analysis/latest", "Latest analysis",
+                                               "Latest known analysis snapshot."),
+                           resource_descriptor("stockfish://engine/options", "Engine options",
+                                               "Current UCI engine options."),
+                           resource_descriptor("stockfish://events/recent", "Recent events",
+                                               "Recent Stockfish state transition events.")}}};
+}
+
+std::string side_to_move_from_fen(const std::string& fen) {
+    std::istringstream is(fen);
+    std::string        board;
+    std::string        side;
+    is >> board >> side;
+
+    if (side == "w")
+        return "white";
+    if (side == "b")
+        return "black";
+    return "unknown";
+}
+
+std::string state_resource(EngineCoordinator& coordinator) {
+    const auto fen = coordinator.fen();
+    return Json(Json::Object{{"fen", fen},
+                             {"sideToMove", side_to_move_from_fen(fen)},
+                             {"moveHistory", Json::Array{}},
+                             {"searchActive", false},
+                             {"controller", "uci"},
+                             {"legalMoveCount", nullptr}})
+      .dump();
+}
+
+std::string latest_analysis_resource() {
+    return Json(Json::Object{{"active", false},
+                             {"source", "none"},
+                             {"bestmove", ""},
+                             {"ponder", ""},
+                             {"candidates", Json::Array{}}})
+      .dump();
+}
+
+std::string engine_options_resource(EngineCoordinator& coordinator) {
+    return Json(Json::Object{{"format", "uci"}, {"uciOptionsText", coordinator.options_as_uci()}})
+      .dump();
+}
+
+std::string recent_events_resource() { return Json(Json::Array{}).dump(); }
+
+std::optional<std::string> resource_text(std::string_view uri, EngineCoordinator& coordinator) {
+    if (uri == "stockfish://state/current")
+        return state_resource(coordinator);
+    if (uri == "stockfish://analysis/latest")
+        return latest_analysis_resource();
+    if (uri == "stockfish://engine/options")
+        return engine_options_resource(coordinator);
+    if (uri == "stockfish://events/recent")
+        return recent_events_resource();
+
+    return std::nullopt;
+}
+
+Json resources_read_result(std::string uri, std::string text) {
+    return Json::Object{
+      {"contents",
+       Json::Array{Json::Object{{"uri", std::move(uri)},
+                                {"mimeType", "application/json"},
+                                {"text", std::move(text)}}}}};
+}
+
 }  // namespace
 
-MCPProtocolResponse handle_mcp_post(const std::string& body) {
+MCPProtocolResponse handle_mcp_post(const std::string& body, EngineCoordinator& coordinator) {
     auto parsed = JsonParser(body).parse();
     if (!parsed)
         return response_with_json(jsonrpc_error(nullptr, -32700, "Parse error"));
@@ -493,6 +578,25 @@ MCPProtocolResponse handle_mcp_post(const std::string& body) {
 
     if (methodName == "ping")
         return response_with_json(jsonrpc_response(*id, Json::Object{}));
+
+    if (methodName == "resources/list")
+        return response_with_json(jsonrpc_response(*id, resources_list_result()));
+
+    if (methodName == "resources/read")
+    {
+        const Json* params = request.get("params");
+        const Json* uri    = params ? params->get("uri") : nullptr;
+
+        if (!uri || !uri->is_string())
+            return response_with_json(jsonrpc_error(*id, -32602, "Missing resource uri"));
+
+        auto text = resource_text(uri->as_string(), coordinator);
+        if (!text)
+            return response_with_json(jsonrpc_error(*id, -32002, "Resource not found"));
+
+        return response_with_json(
+          jsonrpc_response(*id, resources_read_result(uri->as_string(), std::move(*text))));
+    }
 
     return response_with_json(jsonrpc_error(*id, -32601, "Method not found"));
 }

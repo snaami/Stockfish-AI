@@ -27,16 +27,17 @@
 
 namespace Stockfish {
 
-MCPHttpServer::MCPHttpServer(MCPConfig cfg) :
+MCPHttpServer::MCPHttpServer(MCPConfig cfg, EngineCoordinator& engineCoordinator) :
     config(std::move(cfg)),
+    coordinator(engineCoordinator),
     server(std::make_unique<httplib::Server>()) {
 
     server->Get("/mcp", [](const httplib::Request&, httplib::Response& res) {
         res.set_content("Stockfish MCP HTTP endpoint is running.\n", "text/plain");
     });
 
-    server->Post("/mcp", [](const httplib::Request& req, httplib::Response& res) {
-        auto response = handle_mcp_post(req.body);
+    server->Post("/mcp", [this](const httplib::Request& req, httplib::Response& res) {
+        auto response = handle_mcp_post(req.body, coordinator);
         res.status    = response.status;
 
         if (!response.body.empty())
