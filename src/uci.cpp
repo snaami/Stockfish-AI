@@ -31,7 +31,6 @@
 #include <vector>
 
 #include "benchmark.h"
-#include "engine.h"
 #include "memory.h"
 #include "movegen.h"
 #include "position.h"

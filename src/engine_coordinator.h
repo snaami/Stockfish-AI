@@ -1,0 +1,93 @@
+/*
+  Stockfish, a UCI chess playing engine derived from Glaurung 2.1
+  Copyright (C) 2004-2026 The Stockfish developers (see AUTHORS file)
+
+  Stockfish is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  Stockfish is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef ENGINE_COORDINATOR_H_INCLUDED
+#define ENGINE_COORDINATOR_H_INCLUDED
+
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <mutex>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+#include "engine.h"
+#include "position.h"
+#include "search.h"
+#include "types.h"
+#include "ucioption.h"
+
+namespace Stockfish {
+
+// EngineCoordinator is the single ownership point intended for protocol adapters.
+// UCI uses it first; embedded MCP can later share the same instance without
+// reaching directly into Engine.
+class EngineCoordinator {
+   public:
+    explicit EngineCoordinator(std::optional<std::string> path = std::nullopt);
+
+    EngineCoordinator(const EngineCoordinator&)            = delete;
+    EngineCoordinator(EngineCoordinator&&)                 = delete;
+    EngineCoordinator& operator=(const EngineCoordinator&) = delete;
+    EngineCoordinator& operator=(EngineCoordinator&&)      = delete;
+
+    std::uint64_t perft(const std::string& fen, Depth depth, bool isChess960);
+
+    void go(Search::LimitsType& limits);
+    void stop();
+    void wait_for_search_finished();
+    std::optional<PositionSetError> set_position(const std::string&              fen,
+                                                 const std::vector<std::string>& moves);
+
+    void set_ponderhit(bool);
+    void search_clear();
+    void flip();
+
+    void set_on_update_no_moves(std::function<void(const Engine::InfoShort&)>&& f);
+    void set_on_update_full(std::function<void(const Engine::InfoFull&)>&& f);
+    void set_on_iter(std::function<void(const Engine::InfoIter&)>&& f);
+    void set_on_bestmove(std::function<void(std::string_view, std::string_view)>&& f);
+    void set_on_verify_network(std::function<void(std::string_view)>&& f);
+
+    void load_network(const std::string& file);
+    void save_network(std::pair<std::optional<std::string>, std::string> file);
+
+    void trace_eval() const;
+
+    const OptionsMap& get_options() const;
+    OptionsMap&       get_options();
+
+    int         get_hashfull(int maxAge = 0) const;
+    std::string fen() const;
+    std::string visualize() const;
+    std::string get_numa_config_as_string() const;
+    std::string numa_config_information_as_string() const;
+    std::string thread_allocation_information_as_string() const;
+    std::string thread_binding_information_as_string() const;
+
+   private:
+    mutable std::mutex mutex;
+    Engine             engine;
+};
+
+}  // namespace Stockfish
+
+#endif  // #ifndef ENGINE_COORDINATOR_H_INCLUDED

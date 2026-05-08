@@ -24,7 +24,7 @@
 #include <string>
 #include <string_view>
 
-#include "engine.h"
+#include "engine_coordinator.h"
 #include "misc.h"
 #include "search.h"
 
@@ -57,8 +57,8 @@ class UCIEngine {
     auto& engine_options() { return engine.get_options(); }
 
    private:
-    Engine      engine;
-    CommandLine cli;
+    EngineCoordinator engine;
+    CommandLine       cli;
 
     static void print_info_string(std::string_view str);
 
