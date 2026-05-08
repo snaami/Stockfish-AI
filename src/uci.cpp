@@ -78,9 +78,14 @@ UCIEngine::UCIEngine(int argc, char** argv) :
 void UCIEngine::init_search_update_listeners() {
     engine.set_on_iter([](const auto& i) { on_iter(i); });
     engine.set_on_update_no_moves([](const auto& i) { on_update_no_moves(i); });
-    engine.set_on_update_full(
-      [this](const auto& i) { on_update_full(i, engine.get_options()["UCI_ShowWDL"]); });
-    engine.set_on_bestmove([](const auto& bm, const auto& p) { on_bestmove(bm, p); });
+    engine.set_on_update_full([this](const auto& i) {
+        engine.update_analysis(i, format_score(i.score));
+        on_update_full(i, engine.get_options()["UCI_ShowWDL"]);
+    });
+    engine.set_on_bestmove([this](const auto& bm, const auto& p) {
+        engine.update_bestmove(bm, p);
+        on_bestmove(bm, p);
+    });
     engine.set_on_verify_network([](const auto& s) { print_info_string(s); });
 }
 
@@ -131,7 +136,10 @@ void UCIEngine::loop() {
         else if (token == "position")
             position(is);
         else if (token == "ucinewgame")
+        {
             engine.search_clear();
+            engine.mark_new_game("uci");
+        }
         else if (token == "isready")
             sync_cout << "readyok" << sync_endl;
 
@@ -220,7 +228,10 @@ void UCIEngine::go(std::istringstream& is) {
     if (limits.perft)
         perft(limits);
     else
+    {
+        engine.mark_search_started("uci");
         engine.go(limits);
+    }
 }
 
 void UCIEngine::bench(std::istream& args) {
@@ -491,6 +502,8 @@ void UCIEngine::position(std::istringstream& is) {
     {
         terminate_on_critical_error(fullCommand, err->what());
     }
+
+    engine.mark_position_changed("uci");
 }
 
 namespace {

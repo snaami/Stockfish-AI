@@ -508,18 +508,41 @@ std::string state_resource(EngineCoordinator& coordinator) {
     return Json(Json::Object{{"fen", fen},
                              {"sideToMove", side_to_move_from_fen(fen)},
                              {"moveHistory", Json::Array{}},
-                             {"searchActive", false},
-                             {"controller", "uci"},
+                             {"searchActive", coordinator.search_active()},
+                             {"controller", coordinator.controller()},
                              {"legalMoveCount", nullptr}})
       .dump();
 }
 
-std::string latest_analysis_resource() {
-    return Json(Json::Object{{"active", false},
-                             {"source", "none"},
-                             {"bestmove", ""},
-                             {"ponder", ""},
-                             {"candidates", Json::Array{}}})
+Json::Array analysis_candidates(const MCPAnalysisSnapshot& snapshot) {
+    Json::Array candidates;
+
+    for (const auto& candidate : snapshot.candidates)
+        candidates.emplace_back(Json::Object{{"multipv", double(candidate.multiPV)},
+                                             {"depth", double(candidate.depth)},
+                                             {"seldepth", double(candidate.selDepth)},
+                                             {"score", candidate.score},
+                                             {"bound", candidate.bound},
+                                             {"wdl", candidate.wdl},
+                                             {"nodes", double(candidate.nodes)},
+                                             {"nps", double(candidate.nps)},
+                                             {"hashfull", double(candidate.hashfull)},
+                                             {"tbhits", double(candidate.tbHits)},
+                                             {"timeMs", double(candidate.timeMs)},
+                                             {"pv", candidate.pv}});
+
+    return candidates;
+}
+
+std::string latest_analysis_resource(EngineCoordinator& coordinator) {
+    const auto snapshot = coordinator.analysis_snapshot();
+
+    return Json(Json::Object{{"active", snapshot.active},
+                             {"source", snapshot.source},
+                             {"fen", snapshot.fen},
+                             {"bestmove", snapshot.bestmove},
+                             {"ponder", snapshot.ponder},
+                             {"candidates", analysis_candidates(snapshot)}})
       .dump();
 }
 
@@ -528,17 +551,27 @@ std::string engine_options_resource(EngineCoordinator& coordinator) {
       .dump();
 }
 
-std::string recent_events_resource() { return Json(Json::Array{}).dump(); }
+std::string recent_events_resource(EngineCoordinator& coordinator) {
+    Json::Array events;
+
+    for (const auto& event : coordinator.recent_events())
+        events.emplace_back(Json::Object{{"type", event.type},
+                                         {"source", event.source},
+                                         {"fen", event.fen},
+                                         {"detail", event.detail}});
+
+    return Json(events).dump();
+}
 
 std::optional<std::string> resource_text(std::string_view uri, EngineCoordinator& coordinator) {
     if (uri == "stockfish://state/current")
         return state_resource(coordinator);
     if (uri == "stockfish://analysis/latest")
-        return latest_analysis_resource();
+        return latest_analysis_resource(coordinator);
     if (uri == "stockfish://engine/options")
         return engine_options_resource(coordinator);
     if (uri == "stockfish://events/recent")
-        return recent_events_resource();
+        return recent_events_resource(coordinator);
 
     return std::nullopt;
 }

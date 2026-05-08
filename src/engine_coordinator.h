@@ -37,6 +37,37 @@
 
 namespace Stockfish {
 
+struct MCPAnalysisLine {
+    int         depth    = 0;
+    int         selDepth = 0;
+    std::size_t multiPV = 0;
+    std::string score;
+    std::string bound;
+    std::string wdl;
+    std::size_t timeMs   = 0;
+    std::size_t nodes    = 0;
+    std::size_t nps      = 0;
+    std::size_t tbHits   = 0;
+    int         hashfull = 0;
+    std::string pv;
+};
+
+struct MCPAnalysisSnapshot {
+    bool active = false;
+    std::string source = "none";
+    std::string fen;
+    std::string bestmove;
+    std::string ponder;
+    std::vector<MCPAnalysisLine> candidates;
+};
+
+struct MCPEvent {
+    std::string type;
+    std::string source;
+    std::string fen;
+    std::string detail;
+};
+
 // EngineCoordinator is the single ownership point intended for protocol adapters.
 // UCI uses it first; embedded MCP can later share the same instance without
 // reaching directly into Engine.
@@ -84,9 +115,29 @@ class EngineCoordinator {
     std::string thread_allocation_information_as_string() const;
     std::string thread_binding_information_as_string() const;
 
+    void mark_position_changed(const std::string& source);
+    void mark_new_game(const std::string& source);
+    void mark_search_started(const std::string& source);
+    void update_analysis(const Engine::InfoFull& info, const std::string& score);
+    void update_bestmove(std::string_view bestmove, std::string_view ponder);
+
+    MCPAnalysisSnapshot   analysis_snapshot() const;
+    std::vector<MCPEvent> recent_events() const;
+    bool                  search_active() const;
+    std::string           controller() const;
+
    private:
+    void add_event_locked(const std::string& type, const std::string& source, const std::string& fen,
+                          const std::string& detail = "");
+
     mutable std::mutex mutex;
     Engine             engine;
+
+    mutable std::mutex      stateMutex;
+    MCPAnalysisSnapshot     analysis;
+    std::vector<MCPEvent>   events;
+    std::string             activeController = "uci";
+    static constexpr size_t MaxEvents = 32;
 };
 
 }  // namespace Stockfish

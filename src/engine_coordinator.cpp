@@ -18,6 +18,7 @@
 
 #include "engine_coordinator.h"
 
+#include <algorithm>
 #include <mutex>
 #include <sstream>
 
@@ -147,6 +148,111 @@ std::string EngineCoordinator::thread_allocation_information_as_string() const {
 std::string EngineCoordinator::thread_binding_information_as_string() const {
     std::lock_guard<std::mutex> lock(mutex);
     return engine.thread_binding_information_as_string();
+}
+
+void EngineCoordinator::mark_position_changed(const std::string& source) {
+    auto currentFen = fen();
+
+    std::lock_guard<std::mutex> lock(stateMutex);
+    activeController = source;
+    analysis.active  = false;
+    analysis.source  = source;
+    analysis.fen     = currentFen;
+    analysis.candidates.clear();
+    add_event_locked("position_changed", source, currentFen);
+}
+
+void EngineCoordinator::mark_new_game(const std::string& source) {
+    auto currentFen = fen();
+
+    std::lock_guard<std::mutex> lock(stateMutex);
+    activeController = source;
+    analysis         = MCPAnalysisSnapshot{};
+    analysis.source  = source;
+    analysis.fen     = currentFen;
+    add_event_locked("new_game", source, currentFen);
+}
+
+void EngineCoordinator::mark_search_started(const std::string& source) {
+    auto currentFen = fen();
+
+    std::lock_guard<std::mutex> lock(stateMutex);
+    activeController = source;
+    analysis.active  = true;
+    analysis.source  = source;
+    analysis.fen     = currentFen;
+    analysis.bestmove.clear();
+    analysis.ponder.clear();
+    analysis.candidates.clear();
+    add_event_locked("search_started", source, currentFen);
+}
+
+void EngineCoordinator::update_analysis(const Engine::InfoFull& info, const std::string& score) {
+    MCPAnalysisLine line;
+    line.depth    = info.depth;
+    line.selDepth = info.selDepth;
+    line.multiPV  = info.multiPV;
+    line.score    = score;
+    line.bound    = std::string(info.bound);
+    line.wdl      = std::string(info.wdl);
+    line.timeMs   = info.timeMs;
+    line.nodes    = info.nodes;
+    line.nps      = info.nps;
+    line.tbHits   = info.tbHits;
+    line.hashfull = info.hashfull;
+    line.pv       = std::string(info.pv);
+
+    std::lock_guard<std::mutex> lock(stateMutex);
+    analysis.active = true;
+
+    auto sameMultiPV = [&](const MCPAnalysisLine& candidate) {
+        return candidate.multiPV == line.multiPV;
+    };
+
+    auto it = std::find_if(analysis.candidates.begin(), analysis.candidates.end(), sameMultiPV);
+    if (it == analysis.candidates.end())
+        analysis.candidates.push_back(std::move(line));
+    else
+        *it = std::move(line);
+}
+
+void EngineCoordinator::update_bestmove(std::string_view bestmove, std::string_view ponder) {
+    auto currentFen = fen();
+
+    std::lock_guard<std::mutex> lock(stateMutex);
+    analysis.active   = false;
+    analysis.bestmove = std::string(bestmove);
+    analysis.ponder   = std::string(ponder);
+    analysis.fen      = currentFen;
+    add_event_locked("bestmove", analysis.source, currentFen, analysis.bestmove);
+}
+
+MCPAnalysisSnapshot EngineCoordinator::analysis_snapshot() const {
+    std::lock_guard<std::mutex> lock(stateMutex);
+    return analysis;
+}
+
+std::vector<MCPEvent> EngineCoordinator::recent_events() const {
+    std::lock_guard<std::mutex> lock(stateMutex);
+    return events;
+}
+
+bool EngineCoordinator::search_active() const {
+    std::lock_guard<std::mutex> lock(stateMutex);
+    return analysis.active;
+}
+
+std::string EngineCoordinator::controller() const {
+    std::lock_guard<std::mutex> lock(stateMutex);
+    return activeController;
+}
+
+void EngineCoordinator::add_event_locked(const std::string& type, const std::string& source,
+                                         const std::string& fen, const std::string& detail) {
+    events.push_back({type, source, fen, detail});
+
+    if (events.size() > MaxEvents)
+        events.erase(events.begin(), events.begin() + (events.size() - MaxEvents));
 }
 
 }  // namespace Stockfish
