@@ -21,6 +21,7 @@
 
 #include "bitboard.h"
 #include "mcp_config.h"
+#include "mcp_http.h"
 #include "misc.h"
 #include "position.h"
 #include "tune.h"
@@ -57,7 +58,23 @@ int main(int argc, char* argv[]) {
 
     Tune::init(uci->engine_options());
 
+    std::unique_ptr<MCPHttpServer> mcpServer;
+    if (mcpConfig.config.enabled)
+    {
+        std::string error;
+        mcpServer = std::make_unique<MCPHttpServer>(mcpConfig.config);
+
+        if (!mcpServer->start(error))
+        {
+            std::cerr << "MCP HTTP startup error: " << error << std::endl;
+            return 1;
+        }
+    }
+
     uci->loop();
+
+    if (mcpServer)
+        mcpServer->stop();
 
     return 0;
 }
