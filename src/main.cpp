@@ -20,6 +20,7 @@
 #include <memory>
 
 #include "bitboard.h"
+#include "mcp_config.h"
 #include "misc.h"
 #include "position.h"
 #include "tune.h"
@@ -34,12 +35,25 @@ int main(int argc, char* argv[]);
 #endif
 
 int main(int argc, char* argv[]) {
+    auto mcpConfig = parse_mcp_config(argc, argv);
+
+    if (mcpConfig.error)
+    {
+        std::cerr << "MCP configuration error: " << *mcpConfig.error << std::endl;
+        return 1;
+    }
+
     std::cout << engine_info() << std::endl;
 
     Bitboards::init();
     Position::init();
 
-    auto uci = std::make_unique<UCIEngine>(argc, argv);
+    if (mcpConfig.config.enabled)
+        std::cerr << "MCP HTTP configured on " << mcpConfig.config.host << ':'
+                  << mcpConfig.config.port << " with control mode "
+                  << mcpConfig.config.control_mode_name() << std::endl;
+
+    auto uci = std::make_unique<UCIEngine>(int(mcpConfig.uciArgv.size()), mcpConfig.uciArgv.data());
 
     Tune::init(uci->engine_options());
 
