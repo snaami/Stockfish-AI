@@ -17,6 +17,7 @@
 */
 
 #include "mcp_http.h"
+#include "mcp_protocol.h"
 
 #define CPPHTTPLIB_NO_EXCEPTIONS
 #include "thirdparty/cpp-httplib/httplib.h"
@@ -34,9 +35,12 @@ MCPHttpServer::MCPHttpServer(MCPConfig cfg) :
         res.set_content("Stockfish MCP HTTP endpoint is running.\n", "text/plain");
     });
 
-    server->Post("/mcp", [](const httplib::Request&, httplib::Response& res) {
-        res.status = 501;
-        res.set_content("MCP JSON-RPC handling is not implemented yet.\n", "text/plain");
+    server->Post("/mcp", [](const httplib::Request& req, httplib::Response& res) {
+        auto response = handle_mcp_post(req.body);
+        res.status    = response.status;
+
+        if (!response.body.empty())
+            res.set_content(response.body, response.contentType);
     });
 
     server->set_error_handler([](const httplib::Request&, httplib::Response& res) {
